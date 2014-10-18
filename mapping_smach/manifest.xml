@@ -1,0 +1,25 @@
+<package>
+  <description brief="mapping_smach">
+
+     mapping_smach
+
+  </description>
+  <author>hdeeken</author>
+  <license>BSD</license>
+  <review status="unreviewed" notes=""/>
+  <url>http://ros.org/wiki/mapping_smach</url>
+
+  <depend package="rospy"/>
+  <depend package="smach"/>
+  <depend package="smach_ros"/>
+  <depend package="geometry_msgs"/>
+  <depend package="sensor_msgs"/>
+  <depend package="std_msgs"/>
+  <depend package="move_base"/>
+  <depend package="tf"/>
+  <depend package="actionlib"/>
+  <depend package="muffin_smach_common"/>
+
+</package>
+
+
