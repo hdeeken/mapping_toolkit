@@ -4,18 +4,20 @@ import roslib; roslib.load_manifest('mapping_smach')
 import rospy
 import smach
 import smach_ros
-import muffin_smach_common
+
 from smach import Concurrence, Sequence
 from util import *
+from move_base_to_pose import *
+
 from geometry_msgs.msg import PoseStamped, Pose, Point, Quaternion
 from visualization_msgs.msg import Marker, MarkerArray
 from std_msgs.msg import String
 from collections import deque
-from muffin_smach_common.move_base_to_pose import move_base_to_pose
+
 
 class wait_for_command(WaitForMsgState):
     def __init__(self): 
-        rospy.loginfo("Waiting for command. You can use:")
+        rospy.loginfo("Waiting for commands. You can use:")
         rospy.loginfo("unknown, collect, execute, exit")
         WaitForMsgState.__init__(self, '/command', String, self._msg_cb, output_keys=['command'])
 
@@ -45,10 +47,9 @@ class process_command(smach.State):
 class wait_for_pose(WaitForMsgState):
     def __init__(self): 
         rospy.loginfo("Waiting for pose.")
-        WaitForMsgState.__init__(self, 'initialposition', PoseStamped, self._msg_cb, output_keys=['pose'])
+        WaitForMsgState.__init__(self, 'mapping_pose', PoseStamped, self._msg_cb, output_keys=['pose'])
 
     def _msg_cb(self, msg, ud):
-        rospy.loginfo("Got Pose.")
         ud.pose = msg
 
 class add_pose_to_queue(smach.State):
@@ -74,91 +75,7 @@ class get_pose_from_queue(smach.State):
         rospy.loginfo('Added Pose #%d', len(self.queue))
         return 'succeeded'
 
-def myhook():
-  print "shutdown time!"
-
-def test_command_processing_smach():
-    rospy.init_node('smach')
-
-    rospy.on_shutdown(myhook)
-
-    sm_plan = smach.Sequence(outcomes = ['succeeded','aborted'],
-        connector_outcome = 'succeeded', userdata =['plan_poses'])
-
-    with sm_plan:
-        smach.Sequence.add('WAIT_POSE', wait_for_pose(),
-                     transitions={'succeeded':'ADD'},
-                     remapping={'pose':'pose'})
-        smach.Sequence.add('ADD', add_pose_to_queue(),
-                     transitions={'succeeded':'COUNT'},
-                     remapping={'poses':'poses'})
-        smach.Sequence.add('COUNT', count_poses(),
-                     transitions={'succeeded':'succeeded', 'aborted':'aborted'})
-
-    sm_execute = smach.Sequence(outcomes = ['succeeded','aborted'],
-        connector_outcome = 'succeeded')
-    with sm_execute:
-        smach.Sequence.add('GET_POSE', get_pose(),
-                     transitions={'succeeded':'MOVE_TO_POSE'},
-                     remapping={'pose':'goal_pose'})
-        smach.Sequence.add('MOVE_TO_POSE', add_pose_to_queue(),
-                     transitions={'arrived':'GET_POSE', 'failed':'aborted'})
-
-    sm_control = smach.StateMachine(outcomes = ['succeeded','aborted','preempted'])
-    with sm_control:
-        smach.StateMachine.add('WAIT_COMMAND', wait_for_command(),
-                     transitions={'succeeded':'PROCESS_COMMAND'},
-                     remapping={'command':'command'})
-        
-        smach.StateMachine.add('PROCESS_COMMAND', process_command(),
-                     transitions={'wait':'WAIT_COMMAND',
-                                  'plan': 'PLAN',
-                                  'abort':'aborted',
-                                  'execute':'aborted' })
-                                  
-        smach.StateMachine.add('PLAN', sm_plan,
-                     transitions={'succeeded':'PLAN',
-                                  'aborted':'WAIT_COMMAND'})
-
-    rospy.loginfo("Executing test...")
-
-    while not rospy.is_shutdown():
-
-      sis = smach_ros.IntrospectionServer('server_name', sm_control, '/SM_ROOT')
-      sis.start()
-      outcome = sm_control.execute()
-      rospy.spin()
-      sis.stop()
-
-def test_pose_array_smach():
-    rospy.init_node('smach')
-
-    rospy.on_shutdown(myhook)
-    sq = smach.Sequence(outcomes = ['succeeded','aborted','preempted'],
-        connector_outcome = 'succeeded')
-
-    with sq:
-        smach.Sequence.add('WAIT', wait_for_pose(),
-                     transitions={'succeeded':'ADD'},
-                     remapping={'pose':'pose'})
-        smach.Sequence.add('ADD', add_pose_to_queue(),
-                     transitions={'succeeded':'COUNT'},
-                     remapping={'poses':'poses'})
-        smach.Sequence.add('COUNT', count_poses(),
-                     transitions={'succeeded':'WAIT', 'aborted':'aborted'})
-
-    rospy.loginfo("Executing test...")
-
-    while not rospy.is_shutdown():
-
-      sis = smach_ros.IntrospectionServer('server_name', sq, '/SM_ROOT')
-      sis.start()
-      outcome = sq.execute()
-      rospy.spin()
-      sis.stop()
-      return TRUE
-
-####
+#### pose collection ####
 class collection_cyle(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['active', 'preempted'])
@@ -194,7 +111,7 @@ def collection_control(ud, msg):
     else: 
       return True
 
-###
+### execution ####
 class execution_cyle(smach.State):
     def __init__(self):
         smach.State.__init__(self, outcomes=['active', 'preempted'])
@@ -328,6 +245,12 @@ class mark_pose_visted(smach.State):
     current_pose = 0
     return 'succeeded'
 
+### smach execution ###
+
+def myhook():
+  print "shutdown time!"
+
+
 def main():
     rospy.init_node("preemption_example")
 
@@ -394,6 +317,5 @@ def main():
       rospy.spin()
       #sis.stop()
 
-###
 if __name__ == '__main__':
     main()
