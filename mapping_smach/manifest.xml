@@ -18,7 +18,6 @@
   <depend package="move_base"/>
   <depend package="tf"/>
   <depend package="actionlib"/>
-  <depend package="muffin_smach_common"/>
 
 </package>
 
